@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+
+doc = '''
+user-manager.
+
+Usage:
+  user-manager add [options] <user>
+  user-manager ls
+  user-manager rm [options] <user>
+  user-manager ssh <user> <public_key>
+  user-manager --help
+
+Options:
+  see user-manager <command> --help for details
+  --help   show this screen
+'''
+
+
+import sys
+import os
+import traceback
+#setup PATH
+dirname = os.path.split(sys.argv[0])[0]
+libdir = os.path.join(dirname,"lib")
+sys.path.append(libdir)
+#setup PATH
+import users
+
+def show_help():
+  print doc
+
+def error_help(msg):
+  print msg
+  show_help()
+  sys.exit(1)
+
+def get_sub_command(cmd):
+  err =  "invalid command: %s" % cmd
+  if not hasattr(users, cmd): error_help(err)
+  if not callable( getattr(users, cmd) ): error_help(err)
+  return getattr(users, cmd)
+
+#MAIN
+try:
+  if len(sys.argv) == 1:
+    show_help()
+    sys.exit(1)
+  arguments = sys.argv[1:]
+  cmd = arguments.pop(0)
+  if cmd in ["-h","--help"]:
+    show_help()
+    sys.exit(1)
+  cmd_func = get_sub_command(cmd)
+  ret = cmd_func(arguments)
+  sys.exit(ret)
+except SystemExit, exc: raise exc
+except Exception, exc:
+  print "internal error please contact support"
+  print traceback.format_exc()
+  sys.exit(1)

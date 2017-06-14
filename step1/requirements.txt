@@ -1,0 +1,10 @@
+Step 1 - Build a set of programs in python to manage the users on a Linux system including setting their ssh key.
+  added feedback: user add command should support all features of system useradd
+
+  Create a command line application that when provided with user information and a public ssh key would create the user on a specified host.
+
+  Assume that the user running the program has the rights to manage users on that host.
+
+  Create a command line application that can list users on a host, reporting their username, userid, and comment fields.
+
+  Create a command line application that can remove a user from a host.
