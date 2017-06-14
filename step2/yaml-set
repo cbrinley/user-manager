@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+import sys
+import traceback
+import yaml
+import argparse
+import pprint 
+
+try:
+  from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+  from yaml import Loader, Dumper
+
+parser = argparse.ArgumentParser(description='yaml-set [options] <key> <value> <filename>')
+
+parser.add_argument('key', 
+                    help='The dotted notation yaml key to set')
+
+parser.add_argument('value', 
+                    help='The value to be inserted into yaml')
+
+parser.add_argument('filename', 
+                    help='The filename to use as yaml source')
+
+parser.add_argument('-t','--type',
+                    choices=["guess","string","bool","int","float","list","dict"], 
+                    default="guess",
+                    help="specify the input type of the value, defaut: guess")
+
+parser.add_argument("-d","--delim",
+                    default=" ",
+                    help="specify the delimiter to be used when parsing items in list or key/val pairs in dict")
+
+parser.add_argument("-k","--key-delim",
+                    default=":",
+                    help="specify the delimiter to be used when parsing an individual key/val pair of dict ")
+
+parser.add_argument("-v","--verbose",
+                    action="store_true",
+                    default=False,
+                    help="show verbose information in output.")
+
+
+
+
+def exit_failure(msg,state=None):
+  sys.stderr.write("[CRIT]: Cannot continue due to failure: %s\n" % msg)
+  if state is not None:
+    if user_args.verbose: state['stack trace'] = traceback.format_stack() 
+    sys.stderr.write("[CRIT]: The following extra information may be helpful:\n")
+    data = pprint.pformat(state) + "\n"
+    sys.stderr.write(data)
+  sys.stderr.flush()
+  sys.exit(1)
+
+def warning(msg,state=None):
+  sys.stderr.write("[WARN]: %s\n" % msg)
+  if state is not None:
+    sys.stderr.write("[WARN]: The following extra information may be helpful:\n")
+    data = pprint.pformat(state) + "\n"
+    sys.stderr.write(data)
+  sys.stderr.flush()
+
+
+class TypeCast(object):
+  def __init__(self,user_args):
+    self.user_args = user_args
+    self.cast_methods = {
+      "int": self.cast_simple,
+      "bool": self.cast_simple,
+      "float": self.cast_simple,
+      "dict": self.cast_dict,
+      "list": self.cast_list,
+      "guess": self.cast_guess
+    }
+
+  def cast_dict(self,value):
+    ret = {}
+    pair_delim = self.user_args.delim
+    kv_delim = self.user_args.key_delim
+    pairs = [v for v in value.split(pair_delim) if v]
+    for pair in pairs:
+      k,v = pair.split(kv_delim)
+      ret[k] = v
+    return ret 
+  
+  def cast_list(self,value):
+    pair_delim = self.user_args.delim
+    if pair_delim not in value: raise Exception("No list delimiter found.") 
+    return [v for v in value.split(pair_delim) if v]
+
+  def cast_simple(self,value):
+    value = value.strip()
+    try: return int(value)
+    except: pass
+    try: return float(value)
+    except: pass
+    if value.lower() == "false": return False
+    if value.lower() == "true": return True
+    return value
+
+  def cast_guess(self,value):
+    for meth in [self.cast_dict,self.cast_list,self.cast_simple]:
+      try: return meth(value)
+      except: pass
+    raise Exception("Cannot guess type. All known permutations attempted. Please check input.")
+
+  def cast(self,value=None):
+    if value is None: value = self.user_args.value
+    method = self.cast_methods[self.user_args.type]
+    state  = {}
+    state['input value'] = value
+    state['input type specified'] = self.user_args.type
+    try: return method(value)
+    except Exception, exc:
+      state['technical error'] = exc
+      exit_failure("Failed to convert input to requested type.",state)
+
+
+class YamlFile(object):
+  def __init__(self,user_args):
+    self.user_args = user_args
+    self.filename = user_args.filename
+    self.fileobj = open(self.filename)
+    self.raw_data = self.fileobj.read()
+    self.data = yaml.load(self.raw_data)
+
+  def get_key(self,key,src):
+    ret = src
+    child_key = key.split(".")[-1]
+    for k in key.split(".")[:-1]:
+      if k in ret:
+        ret = ret[k]
+        continue
+      try: 
+        k = int(k)
+        if k in ret:
+          ret = ret[k]
+          continue
+      except: pass
+      tmp = ret.get(k,{})
+      ret[k] = tmp
+      ret = tmp 
+    return ret,child_key
+
+  def dump(self):
+    return yaml.dump(self.data,Dumper=Dumper,default_flow_style=False)
+
+  def update(self,input_data):
+    try:
+      inner,child_key = self.get_key(self.user_args.key,self.data)
+      inner[child_key] = input_data
+      return self.dump()
+    except Exception, exc:
+      state  = {}
+      state['input value'] = pprint.pformat(input_data)
+      state['technical error'] = exc
+      exit_failure("Failed to merge input to source yaml.",state)
+
+
+#MAIN()
+user_args = parser.parse_args()
+caster = TypeCast(user_args)
+new_data = caster.cast()
+yml = YamlFile(user_args)
+ret = yml.update(new_data)
+print ret

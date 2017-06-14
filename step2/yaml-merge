@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+
+import sys
+import yaml
+try:
+  from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+  from yaml import Loader, Dumper
+
+
+def show_help():
+  print '''
+  usage: yaml-merge <least_precedent_yaml_file> [<most_precedent_yaml_file> ...]
+
+  outputs a merged yaml document to stdout
+  '''
+  sys.exit(1)
+
+
+class Merge(object):
+  def __init__(self,file_list):
+    self.data = []
+    self.init_data(file_list)
+
+  def init_data(self,file_list):
+    for file_name in file_list:
+      try:
+        raw_data = open(file_name).read()
+        self.data.append(yaml.load(raw_data,Loader=Loader))
+      except:
+        self.error("could not use %s, it will be skipped." % file_name)
+        sys.stderr.flush()
+    if len(self.data) == 0:
+      self.error("no valid files found. exiting.")
+      sys.exit(1)
+
+  def error(self,msg):
+    if msg[-1] != "\n": msg += "\n"
+    sys.stderr.write(msg)
+    sys.stderr.flush()
+
+  def is_scalar(self,val):
+    return type(val) in [int,float,str,bool]
+
+  def get(self,obj,key):
+    try: return obj[key]
+    except: return None
+
+  def is_none(self,item):
+    return item is None
+
+  def same_type(self,a,b):
+    return type(a) == type(b)
+
+  def are_lists(self,a,b):
+    return (type(a) == list) and (type(b) == list)
+
+  def are_dicts(self,a,b):
+    return (type(a) == dict) and (type(b) == dict)
+
+  def list_merge(self,dest,source):
+    for i in range(len(source)):
+      dest_item = self.get(dest,i)
+      src_item = source[i]
+      dest[i] = dest_item 
+      if self.is_none(src_item):
+        continue
+      elif not self.same_type(dest_item,src_item): 
+        dest[i] = src_item
+      elif self.are_lists(dest_item,src_item): 
+        dest[i] = self.list_merge(dest_item,src_item)
+      elif self.are_dicts(dest_item,src_item):
+        dest[i] = self.dict_merge(dest_item,src_item)
+      else:
+        dest[i] = src_item
+    return dest 
+
+  def dict_merge(self,dest,source):
+    for k,sv in source.items():
+      dv = dest.get(k)
+      dest[k] = dv
+      if self.is_none(sv): 
+        continue
+      elif not self.same_type(dv,sv):
+        dest[k] = sv
+      elif self.are_dicts(dv,sv):
+        dest[k] = self.dict_merge(dv,sv)
+      elif self.are_lists(dv,sv):
+        dest[k] = self.list_merge(dv,sv)
+      else:
+        dest[k] = sv
+    return dest 
+
+  def __str__(self):
+    rt = type(self.data[0])
+    ret = rt()
+    i = 0
+    allowed = {dict:"Dictionary",list:"List"}
+    try: ats = allowed[rt]
+    except: 
+      err = "File argument number %s must be either a dictionary or list. Found %s. Cannot continue." % (i,rt)
+      self.error(err)
+      sys.exit(1)
+    for d in self.data:
+      if not self.same_type(ret,d):
+        td = type(d)
+        err = "File argument number %s must be a %s. Found %s. Skipping." % (i,ats,td)
+        self.error(err)
+        continue
+      if rt is dict: self.dict_merge(ret,d)
+      if rt is list: self.list_merge(ret,d) 
+      i += 1
+    return yaml.dump(ret,Dumper=Dumper,default_flow_style=False)
+
+
+m = Merge(sys.argv[1:])
+print m

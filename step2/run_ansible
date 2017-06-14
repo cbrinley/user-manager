@@ -1,0 +1,5 @@
+#!/bin/bash
+ansible-playbook -i inventory -c local $@ playbook.yml
+ret=$?
+rm playbook.retry &>/dev/null
+exit $ret

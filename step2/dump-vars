@@ -1,0 +1,12 @@
+#!/bin/bash
+
+which jq &>/dev/null
+ret=$?
+test -z "$1" && query='.' || query="$1"
+
+
+if [ $ret -eq 0 ]; then
+  { echo -en '{"ansible_facts": {'; ansible all -c local -i localhost, -m setup | grep -v 'SUCCESS =>' | grep -v '"ansible_facts": {';} | jq "$query"
+else
+  ansible all -c local -i localhost, -m setup
+fi

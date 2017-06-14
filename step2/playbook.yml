@@ -1,0 +1,30 @@
+- hosts: localhost
+  vars:
+    action_type: manage #valid: manage | list 
+    state: present
+    username: test-user 
+    pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDN4jghbkmbnrHMPFAY6dlQQ9s3EFyTn0cpW/vuGLYkQz3jvhjAOeXB6XIIw3+JvRLL81tSSG/vurOnZlwjg++zTBh92bGfzrCczsMtcYoFoMoYmRD8nnChPHc8j29VgFu2zno5ILM5hK0A+YRsRg0BzSIyYtIk/rQSLuM1Ee30MFeFMtbTDQuilvwfGWctaHtXBCBjzJSjC1KAFXuzwcwR3aSHedDPUW5P/oX1FAAa3mltZ5FBlDQqZtDJzr0YjApz6T5OPkzrImmJy9DjxuWeQplscj18Bdaz/1XpSq0kTj2CTNSvmOv4vVwrjqiXOmuIsu+8+rnKGLTrZw9jLUh/ vagrant@vagrant-ubuntu-trusty-64"
+  tasks:
+    - name: manage user
+      user:
+        name: "{{username}}"
+        state: "{{state}}"
+      when: action_type == 'manage'
+
+    - name: manage ssh public key 
+      authorized_key:
+        user: "{{username}}"
+        state: "{{state}}"
+        key: "{{pubkey}}"
+      when: action_type == 'manage'
+
+    - name: list users
+      set_fact:
+        user_details: "{{lookup('users',username)}}"
+      register: user_details
+      when: action_type == 'list'
+
+    - name: show users
+      debug:
+        var: user_details
+      when: action_type == 'list'
