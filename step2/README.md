@@ -15,4 +15,4 @@ vars:
 
 
 ### Override:
-any var in playbook may be override from command line with `./run\_ansible -e action\_type=list`
+any var in playbook may be override from command line with `./run_ansible -e action_type=list`
